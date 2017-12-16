@@ -1,23 +1,57 @@
 package io.offscale.samuel.android_auth_scaffold.utils;
 
-import java.io.IOException;
 import java.util.Locale;
 
+import io.offscale.samuel.android_auth_scaffold.api.ErrorResponse;
 import okhttp3.Response;
+
+import static io.offscale.samuel.android_auth_scaffold.utils.GsonSingleton.getGson;
+import static io.offscale.samuel.android_auth_scaffold.utils.ResponseUtils.tryGetResponseStr;
 
 /**
  * ErrRes class
  */
 public class ErrResResponse<F, S> extends ErrRes<F, S> {
     private final Response mResponse;
+    private ErrorResponse mErrorResponse;
+
+    public boolean isClosed() {
+        return mClosed;
+    }
+
+    private void setClosed(boolean mClosed) {
+        this.mClosed = mClosed;
+    }
+
+    private boolean mClosed = false;
 
     public ErrResResponse(final F error, final S result, final Response response) {
         super(error, result);
+
         mResponse = response;
+        if (error == null && response.code() / 100 > 3) {
+            try {
+                mErrorResponse = getGson()
+                        .fromJson(tryGetResponseStr(response), ErrorResponse.class);
+            } catch (IllegalStateException e) {
+                mErrorResponse = new ErrorResponse("ResponseError", "Probably Internet is out");
+            } finally {
+                setClosed(true);
+            }
+        } else if (error != null && !(error instanceof ErrorResponse)) {
+            mErrorResponse = getGson().fromJson(
+                    String.format(Locale.getDefault(), "%s", error), ErrorResponse.class
+            );
+            setClosed(true);
+        } else mErrorResponse = null;
     }
 
     public final Response getResponse() {
         return mResponse;
+    }
+
+    public final ErrorResponse getErrorResponse() {
+        return mErrorResponse;
     }
 
     @Override
@@ -26,11 +60,9 @@ public class ErrResResponse<F, S> extends ErrRes<F, S> {
                 "{mError: %s, mResult: %s, mResponse: {code: %d",
                 getError(), getResult(), mResponse.code());
 
-        try {
-            return String.format(Locale.getDefault(), "%s, body: %s} }",
-                    r, mResponse.body().string());
-        } catch (IOException | IllegalStateException e) {
-            return r + "} }";
-        }
+        return String.format(Locale.getDefault(), "%s, body: %s} }",
+                r, mErrorResponse == null ? tryGetResponseStr(mResponse)
+                        : mErrorResponse
+        );
     }
 }

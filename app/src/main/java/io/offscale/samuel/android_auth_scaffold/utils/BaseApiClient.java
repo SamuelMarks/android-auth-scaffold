@@ -1,6 +1,13 @@
 package io.offscale.samuel.android_auth_scaffold.utils;
 
 import android.content.Context;
+import android.util.Log;
+
+import java.net.ConnectException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import io.offscale.samuel.android_auth_scaffold.R;
 import okhttp3.Authenticator;
@@ -18,9 +25,10 @@ public class BaseApiClient {
                          final Authenticator authenticator,
                          final Interceptor[] interceptors,
                          final boolean authInterceptor,
-                         final String accessToken) {
+                         final String accessToken) throws ConnectException {
         final OkHttpClient.Builder builder = cache == null ?
-                (new CachedReq(context.getFilesDir().getPath(), getClass().getCanonicalName())
+                (new CachedReq(context.getFilesDir().getPath(),
+                        getClass().getCanonicalName())
                 ).getClientBuilder() : cache.getClientBuilder();
         if (authenticator != null)
             builder.authenticator(authenticator);
@@ -30,20 +38,52 @@ public class BaseApiClient {
         if (authInterceptor && accessToken != null)
             builder.addInterceptor(new AuthRequestInterceptor(accessToken));
         mClient = builder.build();
-        mBaseUri = (hostname == null ? context.getString(R.string.api_prefix) : hostname) + "/api";
+        final String s = String.format("%s/api", hostname == null ?
+                (PrefSingleton.getInstance().contains("API") ?
+                        PrefSingleton.getInstance().getString("API")
+                        : context.getString(R.string.api_prefix)) : hostname);
+        mBaseUri = s.startsWith("http") ? s : String.format("http://%s", s);
+        if (!NetworkUtils.isNetworkAvailable(context))
+            throw new ConnectException("Network not connected");
+        else {
+            final ExecutorService executor = Executors.newSingleThreadExecutor();
+            final Runnable task = new Runnable() {
+                public void run() {
+                    if (!NetworkUtils.get(mBaseUri))
+                        throw new RuntimeException("API not connected");
+                }
+            };
+
+            final Future<?> future = executor.submit(task);
+            try {
+                future.get();
+            } catch (ExecutionException e) {
+                e.printStackTrace(System.err);
+                throw new ConnectException(e.getMessage());
+            } catch (InterruptedException e) {
+                e.printStackTrace(System.err);
+                throw new ConnectException(e.getMessage());
+            }
+        }
     }
 
     public BaseApiClient(final Context context,
                          final String hostname,
-                         final CachedReq cache) {
-        this(context, hostname, cache, null, null, false, null);
+                         final CachedReq cache) throws ConnectException {
+        this(context, hostname, cache,
+                null, null, false,
+                null);
     }
 
     public final OkHttpClient getClient() {
         return mClient;
     }
 
-    protected final String getBaseUri() {
+    public final String getBaseUri() {
         return mBaseUri;
+    }
+
+    public final String getNonApiBaseUri() {
+        return mBaseUri.substring(0, mBaseUri.lastIndexOf("/api"));
     }
 }

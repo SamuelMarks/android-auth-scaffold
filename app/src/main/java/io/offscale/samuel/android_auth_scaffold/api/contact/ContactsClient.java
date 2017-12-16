@@ -4,6 +4,8 @@ import android.content.Context;
 
 import com.google.gson.Gson;
 
+import java.net.ConnectException;
+
 import io.offscale.samuel.android_auth_scaffold.utils.ApiClient;
 import io.offscale.samuel.android_auth_scaffold.utils.BaseApiClient;
 import io.offscale.samuel.android_auth_scaffold.utils.ErrorOrEntity;
@@ -17,7 +19,7 @@ public final class ContactsClient extends BaseApiClient {
     private final String mApiPrefix = "/contact";
     private final Gson mGson = getGson();
 
-    public ContactsClient(final Context context, final String accessToken) {
+    public ContactsClient(final Context context, final String accessToken) throws ConnectException {
         super(context, null, null, null, null, true, accessToken);
     }
 

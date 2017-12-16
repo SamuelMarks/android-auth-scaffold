@@ -15,12 +15,14 @@ import android.widget.TextView;
 import android.widget.ViewSwitcher;
 
 import java.lang.ref.WeakReference;
+import java.net.ConnectException;
 import java.util.Locale;
 
 import io.offscale.samuel.android_auth_scaffold.api.contact.Contact;
 import io.offscale.samuel.android_auth_scaffold.api.contact.ContactClient;
 import io.offscale.samuel.android_auth_scaffold.utils.ActivityUtilsSingleton;
 import io.offscale.samuel.android_auth_scaffold.utils.CommonErrorHandlerRedirector;
+import io.offscale.samuel.android_auth_scaffold.utils.ErrorHandler;
 import io.offscale.samuel.android_auth_scaffold.utils.ErrorOrEntity;
 import io.offscale.samuel.android_auth_scaffold.utils.PrefSingleton;
 import io.offscale.samuel.android_auth_scaffold.utils.ProgressHandler;
@@ -80,7 +82,13 @@ public final class ContactActivity extends AppCompatActivity {
             return;
         }
 
-        mContactClient = new ContactClient(this, accessToken);
+        try {
+            mContactClient = new ContactClient(this, accessToken);
+        } catch (RuntimeException | ConnectException e) {
+            ErrorHandler.askCloseApp(this, e.getMessage(), mSharedPrefs);
+            return;
+        }
+
         final Contact contact = Contact.fromString(mUtils.getFromLocalOrCache("current_contact"));
         mCommonErrorHandlerRedirector = new CommonErrorHandlerRedirector(this, mSharedPrefs);
 

@@ -1,5 +1,7 @@
 package io.offscale.samuel.android_auth_scaffold.utils;
 
+import android.util.Log;
+
 import com.google.gson.Gson;
 
 import java.io.IOException;
@@ -67,10 +69,18 @@ public final class ApiClient {
             return new ErrorOrEntity<>(e);
         }
 
+        if (Integer.valueOf(res.getResponse().header("Content-Length")) < 1)
+            return new ErrorOrEntity<>(new Exception("Empty Content-Length"));
+        else if (res.getErrorResponse() != null) {
+            return new ErrorOrEntity<>(null, res.getErrorResponse(),
+                    res.getResponse().headers(), res.getResponse().code(), null);
+        } else if (res.isClosed())
+            return new ErrorOrEntity<>(new RuntimeException("Response is already closed"));
+
         final Reader charStream;
         try {
             charStream = res.getResponse().body().charStream();
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException | NullPointerException e) {
             return new ErrorOrEntity<>(e);
         }
 
@@ -84,7 +94,7 @@ public final class ApiClient {
                     res.getResponse().headers(), res.getResponse().code(), null);
             res.getResponse().close();
             return ret;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return new ErrorOrEntity<>(e);
         }
     }

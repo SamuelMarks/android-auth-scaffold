@@ -1,25 +1,21 @@
 package io.offscale.samuel.android_auth_scaffold;
 
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
 import android.annotation.TargetApi;
+import android.app.LoaderManager.LoaderCallbacks;
+import android.content.CursorLoader;
 import android.content.Intent;
+import android.content.Loader;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.ContactsContract;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.design.widget.TextInputEditText;
 import android.support.v7.app.AppCompatActivity;
-import android.app.LoaderManager.LoaderCallbacks;
-
-import android.content.CursorLoader;
-import android.content.Loader;
-import android.database.Cursor;
-import android.net.Uri;
-import android.os.AsyncTask;
-
-import android.os.Build;
-import android.os.Bundle;
-import android.provider.ContactsContract;
 import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.View;
@@ -28,12 +24,12 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,6 +38,9 @@ import io.offscale.samuel.android_auth_scaffold.api.ServerClient;
 import io.offscale.samuel.android_auth_scaffold.utils.ActivityUtilsSingleton;
 import io.offscale.samuel.android_auth_scaffold.utils.ApiClient;
 import io.offscale.samuel.android_auth_scaffold.utils.ErrResResponse;
+import io.offscale.samuel.android_auth_scaffold.utils.ErrorHandler;
+import io.offscale.samuel.android_auth_scaffold.utils.Formatters;
+import io.offscale.samuel.android_auth_scaffold.utils.HttpCodeException;
 import io.offscale.samuel.android_auth_scaffold.utils.PrefSingleton;
 import io.offscale.samuel.android_auth_scaffold.utils.ProgressHandler;
 import okhttp3.Call;
@@ -50,7 +49,6 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 import static android.Manifest.permission.READ_CONTACTS;
-import static io.offscale.samuel.android_auth_scaffold.utils.Formatters.ExceptionFormatter;
 
 /**
  * A login screen that offers login via email/password.
@@ -107,8 +105,13 @@ public class AuthActivity extends AppCompatActivity implements LoaderCallbacks<C
             }
         }
 
-        mAuthClient = new AuthClient(this);
-        mServerClient = new ServerClient(this);
+        try {
+            mAuthClient = new AuthClient(this);
+            mServerClient = new ServerClient(this);
+        } catch (RuntimeException | ConnectException e) {
+            ErrorHandler.askCloseApp(this, e.getMessage(), mSharedPrefs);
+            return;
+        }
 
         ApiClient.async(mAuthClient.getClient(), mServerClient.get_version(), new Callback() {
             @Override
@@ -118,7 +121,7 @@ public class AuthActivity extends AppCompatActivity implements LoaderCallbacks<C
                     @Override
                     public final void run() {
                         mErrorView.setError("");
-                        mErrorView.setText(ExceptionFormatter(e));
+                        mErrorView.setText(Formatters.ExceptionFormatter(e));
                     }
                 });
             }
@@ -136,7 +139,7 @@ public class AuthActivity extends AppCompatActivity implements LoaderCallbacks<C
                         } catch (final IOException | IllegalStateException e) {
                             e.printStackTrace(System.err);
                             mErrorView.setError("");
-                            mErrorView.setError(ExceptionFormatter(e));
+                            mErrorView.setError(Formatters.ExceptionFormatter(e));
                         } finally {
                             response.close();
                         }
@@ -196,7 +199,7 @@ public class AuthActivity extends AppCompatActivity implements LoaderCallbacks<C
         }
         if (shouldShowRequestPermissionRationale(READ_CONTACTS)) {
             Snackbar.make(mEmailView, R.string.permission_rationale, Snackbar.LENGTH_INDEFINITE)
-                    .setAction(android.R.string.ok, new View.OnClickListener() {
+                    .setAction(android.R.string.ok, new OnClickListener() {
                         @Override
                         @TargetApi(Build.VERSION_CODES.M)
                         public void onClick(View v) {
@@ -297,7 +300,7 @@ public class AuthActivity extends AppCompatActivity implements LoaderCallbacks<C
     @Override
     public final Loader<Cursor> onCreateLoader(final int i, final Bundle bundle) {
         return new CursorLoader(this,
-                // Retrieve data rows for the device user's 'profile' contact.
+                // Retrieve data rows for the device user's 'profile' room.
                 Uri.withAppendedPath(ContactsContract.Profile.CONTENT_URI,
                         ContactsContract.Contacts.Data.CONTENT_DIRECTORY), ProfileQuery.PROJECTION,
 
@@ -369,11 +372,12 @@ public class AuthActivity extends AppCompatActivity implements LoaderCallbacks<C
         protected final ErrResResponse<Exception, ResponseBody> doInBackground(final Void... params) {
             try {
                 final ErrResResponse<Exception, ResponseBody> err_res = ApiClient.sync(
-                        mAuthClient.getClient(), mAuthClient.register(mEmail, mPassword));
-                if (err_res.failure() && err_res.getResponse().body().string().contains(
-                        "duplicate key value violates unique constraint"))
+                        mAuthClient.getClient(), mAuthClient.login(mEmail, mPassword));
+
+                if (err_res.failure() && err_res.getResponse().code() == 404)
                     return ApiClient.sync(mAuthClient.getClient(),
-                            mAuthClient.login(mEmail, mPassword));
+                            mAuthClient.register(mEmail, mPassword));
+
                 return err_res;
             } catch (IOException | IllegalStateException e) {
                 return new ErrResResponse<>((Exception) e, null, null);
@@ -385,28 +389,31 @@ public class AuthActivity extends AppCompatActivity implements LoaderCallbacks<C
             final AuthActivity activity = mWeakActivity.get();
             if (activity == null || activity.isFinishing()) return;
 
+            final int http_code = err_res.getResponse().code();
+            final boolean success = http_code / 100 < 3;
+            if (!success)
+                err_res.setFallbackError(new HttpCodeException(http_code));
+
             activity.mSignInUpTask = null;
             activity.showProgress(false);
-            if (err_res.success()) {
+            if (success && err_res.success()) {
                 final String access_token = err_res.getResponse().header("X-Access-Token");
                 activity.mSharedPrefs.putString("access_token", access_token);
                 activity.mSharedPrefs.putString("email", mEmail);
                 activity.finish();
+
                 final Intent intent = new Intent(activity, ContactsDashActivity.class);
                 intent.putExtra("access_token", access_token);
                 intent.putExtra("email", mEmail);
+
                 activity.startActivity(intent);
             } else {
                 activity.mErrorView.setError("");
-                if (err_res.getResponse() != null)
-                    try {
-                        activity.mErrorView.setText(err_res.getResponse().body().string());
-                    } catch (IOException | IllegalStateException e) {
-                        e.printStackTrace(System.err);
-                    }
+                if (err_res.getErrorResponse() != null)
+                    activity.mErrorView.setText(err_res.getErrorResponse().toString());
                 else if (err_res.getError() != null) {
                     err_res.getError().printStackTrace(System.err);
-                    activity.mErrorView.setText(ExceptionFormatter(err_res.getError()));
+                    activity.mErrorView.setText(Formatters.ExceptionFormatter(err_res.getError()));
                 }
             }
         }

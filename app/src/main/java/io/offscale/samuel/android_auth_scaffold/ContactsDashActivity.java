@@ -17,6 +17,7 @@ import android.widget.Toast;
 import android.widget.ViewSwitcher;
 
 import java.lang.ref.WeakReference;
+import java.net.ConnectException;
 
 import io.offscale.samuel.android_auth_scaffold.api.contact.Contact;
 import io.offscale.samuel.android_auth_scaffold.api.contact.ContactAdapter;
@@ -24,6 +25,7 @@ import io.offscale.samuel.android_auth_scaffold.api.contact.ContactsClient;
 import io.offscale.samuel.android_auth_scaffold.api.contact.ListContacts;
 import io.offscale.samuel.android_auth_scaffold.utils.ActivityUtilsSingleton;
 import io.offscale.samuel.android_auth_scaffold.utils.CommonErrorHandlerRedirector;
+import io.offscale.samuel.android_auth_scaffold.utils.ErrorHandler;
 import io.offscale.samuel.android_auth_scaffold.utils.ErrorOrEntity;
 import io.offscale.samuel.android_auth_scaffold.utils.PrefSingleton;
 import io.offscale.samuel.android_auth_scaffold.utils.ProgressHandler;
@@ -90,7 +92,12 @@ public final class ContactsDashActivity extends AppCompatActivity {
             return;
         }
 
-        mContactsClient = new ContactsClient(this, accessToken);
+        try {
+            mContactsClient = new ContactsClient(this, accessToken);
+        } catch (RuntimeException | ConnectException e) {
+            ErrorHandler.askCloseApp(this, e.getMessage(), mSharedPrefs);
+            return;
+        }
 
         mProgressView = findViewById(R.id.contacts_dash_progress);
 

@@ -24,6 +24,7 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import java.lang.ref.WeakReference;
+import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +33,7 @@ import io.offscale.samuel.android_auth_scaffold.api.contact.Contact;
 import io.offscale.samuel.android_auth_scaffold.api.contact.ContactsClient;
 import io.offscale.samuel.android_auth_scaffold.utils.ActivityUtilsSingleton;
 import io.offscale.samuel.android_auth_scaffold.utils.CommonErrorHandlerRedirector;
+import io.offscale.samuel.android_auth_scaffold.utils.ErrorHandler;
 import io.offscale.samuel.android_auth_scaffold.utils.ErrorOrEntity;
 import io.offscale.samuel.android_auth_scaffold.utils.PrefSingleton;
 import io.offscale.samuel.android_auth_scaffold.utils.ProgressHandler;
@@ -101,7 +103,12 @@ public final class CreateContactActivity
         mProgressHandler = new ProgressHandler(mProgressView, mCreateContactFormView,
                 getResources().getInteger(android.R.integer.config_shortAnimTime));
 
-        mContactsClient = new ContactsClient(this, accessToken);
+        try {
+            mContactsClient = new ContactsClient(this, accessToken);
+        } catch (RuntimeException | ConnectException e) {
+            ErrorHandler.askCloseApp(this, e.getMessage(), mSharedPrefs);
+            return;
+        }
         mCommonErrorHandlerRedirector = new CommonErrorHandlerRedirector(this, mSharedPrefs);
     }
 
