@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <integer name="auth_email">0</integer>
+    <integer name="auth_password">1</integer>
+</resources>

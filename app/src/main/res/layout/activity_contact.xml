@@ -9,7 +9,7 @@
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
-    tools:context="io.offscale.samuel.android_auth_scaffold.ContactActivity">
+    tools:context="io.complicated.android_auth_scaffold.ContactActivity">
 
     <LinearLayout
         android:id="@+id/activity_contact_view_contact"
