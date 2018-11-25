@@ -158,7 +158,7 @@ public class AuthActivity extends AppCompatActivity implements LoaderCallbacks<C
             @Override
             public boolean onEditorAction(final TextView textView,
                                           final int id, final KeyEvent keyEvent) {
-                if (id == R.id.login || id == EditorInfo.IME_NULL) {
+                if (id == R.id.sign_password || id == EditorInfo.IME_NULL) {
                     attemptLogin();
                     return true;
                 }
