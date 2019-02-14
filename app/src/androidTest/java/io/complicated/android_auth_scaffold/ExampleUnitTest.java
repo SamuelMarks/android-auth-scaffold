@@ -1,8 +1,11 @@
 package io.complicated.android_auth_scaffold;
 
+import org.hamcrest.core.IsEqual;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
+
+import io.complicated.android_auth_scaffold.api.contact.Contact;
 
 /**
  * Example local unit test, which will execute on the development machine (host).
