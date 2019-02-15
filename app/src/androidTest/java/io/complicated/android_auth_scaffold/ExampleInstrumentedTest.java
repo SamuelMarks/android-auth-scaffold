@@ -23,4 +23,6 @@ public class ExampleInstrumentedTest {
 
         assertEquals("io.complicated.android_auth_scaffold", appContext.getPackageName());
     }
+
+
 }
